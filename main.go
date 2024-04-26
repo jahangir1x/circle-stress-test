@@ -3,13 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/divan/num2words"
-	"github.com/go-resty/resty/v2"
 	"strconv"
 	"stress_test/randomizer"
 	"stress_test/serializer"
-	"strings"
 	"sync"
+
+	"github.com/go-resty/resty/v2"
 )
 
 func login(client *resty.Client, email string, password string) (string, error) {
@@ -108,8 +107,7 @@ func main() {
 		go func() {
 			defer wg.Done()
 			client := resty.New()
-			userId := num2words.Convert(i)
-			email, password := "not-a-robot-test-"+strings.ReplaceAll(userId, " ", "-")+"@gmail.com", "Abcd1234"
+			email, password := "not-a-robot-"+strconv.Itoa(i)+"@gmail.com", "Abcd1234"
 			fmt.Println("trying to login with email:", email, "password:", password)
 			accessToken, err := login(client, email, password)
 			if err != nil {
