@@ -7,4 +7,7 @@ require (
 	github.com/gocarina/gocsv v0.0.0-20231116093920-b87c2d0e983a
 )
 
-require golang.org/x/net v0.22.0 // indirect
+require (
+	github.com/divan/num2words v0.0.0-20170904212200-57dba452f942 // indirect
+	golang.org/x/net v0.22.0 // indirect
+)

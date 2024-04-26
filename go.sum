@@ -1,3 +1,5 @@
+github.com/divan/num2words v0.0.0-20170904212200-57dba452f942 h1:fJ8/Lid8fF4i7Bwl7vWKvG2KeZzr3yU4qG6h/DPdXLU=
+github.com/divan/num2words v0.0.0-20170904212200-57dba452f942/go.mod h1:K88GQWK1aAiPMo9q2LZwyKBfEGnge7kmVVTUcZ61HSc=
 github.com/go-resty/resty/v2 v2.12.0 h1:rsVL8P90LFvkUYq/V5BTVe203WfRIU4gvcf+yfzJzGA=
 github.com/go-resty/resty/v2 v2.12.0/go.mod h1:o0yGPrkS3lOe1+eFajk6kBW8ScXzwU3hD69/gt2yB/0=
 github.com/gocarina/gocsv v0.0.0-20231116093920-b87c2d0e983a h1:RYfmiM0zluBJOiPDJseKLEN4BapJ42uSi9SZBQ2YyiA=

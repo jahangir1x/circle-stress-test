@@ -2,16 +2,17 @@ package main
 
 import (
 	"fmt"
-	"stress_test/serializer"
-	"sync"
-
+	"github.com/divan/num2words"
 	"github.com/go-resty/resty/v2"
+	"stress_test/serializer"
+	"strings"
+	"sync"
 )
 
-func login(client *resty.Client) (string, error) {
+func login(client *resty.Client, email string, password string) (string, error) {
 	payload := serializer.LoginReq{
-		Email:     "not-a-robot-test-thirty-two@gmail.com",
-		Password:  "Abcd1234",
+		Email:     email,
+		Password:  password,
 		LongLived: true,
 	}
 
@@ -33,9 +34,11 @@ func pingAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
 	defer wg.Done()
 
 	location := serializer.Location{
-		Latitude:  85.069,
-		Longitude: 180,
+		Latitude:  getRandomLatitude(),
+		Longitude: getRandomLatitude(),
 	}
+
+	fmt.Println("ping location: ", location)
 
 	var response interface{}
 	_, err := client.R().
@@ -56,9 +59,11 @@ func userFeedAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
 	defer wg.Done()
 
 	location := serializer.Location{
-		Latitude:  85.05112878,
-		Longitude: 180,
+		Latitude:  getRandomLatitude(),
+		Longitude: getRandomLatitude(),
 	}
+
+	fmt.Println("user feed location: ", location)
 
 	var response interface{}
 	_, err := client.R().
@@ -76,21 +81,29 @@ func userFeedAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
 }
 
 func main() {
-
-	client := resty.New()
-	accessToken, err := login(client)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("Logged in successfully")
 	var wg sync.WaitGroup
-	wg.Add(2)
+	for i := 1; i <= 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			client := resty.New()
+			userId := num2words.Convert(i)
+			email, password := "not-a-robot-test-"+strings.ReplaceAll(userId, " ", "-")+"@gmail.com", "Abcd1234"
+			accessToken, err := login(client, email, password)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			fmt.Println("Logged in successfully")
+			var wgJob sync.WaitGroup
+			wgJob.Add(2)
 
-	go pingAPI(client, &wg, accessToken)
-	go userFeedAPI(client, &wg, accessToken)
+			go pingAPI(client, &wg, accessToken)
+			go userFeedAPI(client, &wg, accessToken)
 
+			wgJob.Wait()
+			fmt.Println("Both goroutines completed execution")
+		}()
+	}
 	wg.Wait()
-	fmt.Println("Both goroutines completed execution")
-
 }
