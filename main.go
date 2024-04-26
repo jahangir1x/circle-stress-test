@@ -185,22 +185,37 @@ func main() {
 		return
 	}
 
-	if shouldLogIn {
-		fmt.Println("log in with lower: ", lower, "upper: ", upper)
-	} else {
-		fmt.Println("test with: upper: ", upper)
-	}
-
 	client := resty.New()
 
+	if shouldLogIn {
+		fmt.Println("log in with lower: ", lower, "upper: ", upper)
+
+		if _, err := os.Stat(accessTokenFile); err == nil {
+			// File exists, so remove it
+			err := os.Remove(accessTokenFile)
+			if err != nil {
+				fmt.Println("Error:", err)
+				return
+			}
+		}
+
+		for i := lower; i <= upper; i++ {
+			email, password := "not-a-robot-"+strconv.Itoa(i)+"@gmail.com", "Abcd1234"
+			_, err := login(client, email, password)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+		}
+		return
+	}
+	fmt.Println("test with: upper: ", upper)
 	var wg sync.WaitGroup
 	for i := 1; i <= upper; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			email, password := "not-a-robot-"+strconv.Itoa(i)+"@gmail.com", "Abcd1234"
-			fmt.Println("trying to login with email:", email, "password:", password)
-			accessToken, err := login(client, email, password)
+			email := "not-a-robot-" + strconv.Itoa(i) + "@gmail.com"
 			if err != nil {
 				fmt.Println(err)
 				return
@@ -208,6 +223,11 @@ func main() {
 			var wgJob sync.WaitGroup
 			wgJob.Add(2)
 
+			accessToken, err := getAccessToken(email)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 			go pingAPI(client, &wg, accessToken)
 			go userFeedAPI(client, &wg, accessToken)
 
