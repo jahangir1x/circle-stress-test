@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"stress_test/randomizer"
 	"stress_test/serializer"
@@ -11,7 +14,15 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+const accessTokenFile = "access_tokens.json"
+
 func login(client *resty.Client, email string, password string) (string, error) {
+	// Check if access token already exists in the file
+	accessToken, err := getAccessToken(email)
+	if err == nil && accessToken != "" {
+		return accessToken, nil
+	}
+
 	payload := serializer.LoginReq{
 		Email:     email,
 		Password:  password,
@@ -29,7 +40,62 @@ func login(client *resty.Client, email string, password string) (string, error) 
 	}
 
 	fmt.Println("Status:", response.Status())
+
+	// Save access token to file
+	err = saveAccessToken(email, loginResp.AccessToken)
+	if err != nil {
+		fmt.Println("Error saving access token:", err)
+	}
+
 	return loginResp.AccessToken, nil
+}
+
+func getAccessToken(email string) (string, error) {
+	file, err := os.Open(accessTokenFile)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	var tokens []serializer.AccessToken
+	err = json.NewDecoder(file).Decode(&tokens)
+	if err != nil {
+		return "", err
+	}
+
+	for _, token := range tokens {
+		if token.Email == email {
+			return token.AccessToken, nil
+		}
+	}
+
+	return "", fmt.Errorf("Access token not found for email: %s", email)
+}
+
+func saveAccessToken(email, accessToken string) error {
+	file, err := os.OpenFile(accessTokenFile, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	var tokens []serializer.AccessToken
+	err = json.NewDecoder(file).Decode(&tokens)
+	if err != nil && err != io.EOF {
+		return err
+	}
+
+	// Append new access token
+	tokens = append(tokens, serializer.AccessToken{Email: email, AccessToken: accessToken})
+
+	// Write back to the file
+	file.Seek(0, 0)
+	err = json.NewEncoder(file).Encode(tokens)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func pingAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
