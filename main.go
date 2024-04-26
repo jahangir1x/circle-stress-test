@@ -1,9 +1,12 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/divan/num2words"
 	"github.com/go-resty/resty/v2"
+	"strconv"
+	"stress_test/randomizer"
 	"stress_test/serializer"
 	"strings"
 	"sync"
@@ -34,8 +37,8 @@ func pingAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
 	defer wg.Done()
 
 	location := serializer.Location{
-		Latitude:  getRandomLatitude(),
-		Longitude: getRandomLatitude(),
+		Latitude:  randomizer.GetRandomLatitude(),
+		Longitude: randomizer.GetRandomLongitude(),
 	}
 
 	fmt.Println("ping location: ", location)
@@ -59,8 +62,8 @@ func userFeedAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
 	defer wg.Done()
 
 	location := serializer.Location{
-		Latitude:  getRandomLatitude(),
-		Longitude: getRandomLatitude(),
+		Latitude:  randomizer.GetRandomLatitude(),
+		Longitude: randomizer.GetRandomLongitude(),
 	}
 
 	fmt.Println("user feed location: ", location)
@@ -80,21 +83,39 @@ func userFeedAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
 	fmt.Println("User feed API response:", response)
 }
 
+func parseCmd() (int, error) {
+	flag.Parse()
+	arguments := flag.Args()
+	if len(arguments) != 1 {
+		return 0, fmt.Errorf("Usage:   go run main.go <total_users>\nexample: go run main.go 10")
+	}
+	num, err := strconv.Atoi(arguments[0])
+	if err != nil {
+		return 0, fmt.Errorf("Invalid number of users")
+	}
+	return num, nil
+}
+
 func main() {
+	totalUsers, err := parseCmd()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	var wg sync.WaitGroup
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= totalUsers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			client := resty.New()
 			userId := num2words.Convert(i)
 			email, password := "not-a-robot-test-"+strings.ReplaceAll(userId, " ", "-")+"@gmail.com", "Abcd1234"
+			fmt.Println("trying to login with email:", email, "password:", password)
 			accessToken, err := login(client, email, password)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			fmt.Println("Logged in successfully")
 			var wgJob sync.WaitGroup
 			wgJob.Add(2)
 
@@ -102,7 +123,6 @@ func main() {
 			go userFeedAPI(client, &wg, accessToken)
 
 			wgJob.Wait()
-			fmt.Println("Both goroutines completed execution")
 		}()
 	}
 	wg.Wait()
