@@ -82,31 +82,56 @@ func userFeedAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
 	fmt.Println("User feed API response:", response)
 }
 
-func parseCmd() (int, error) {
+func parseCmd() (shouldLogIn bool, lowerBound int, upperBound int, err error) {
 	flag.Parse()
 	arguments := flag.Args()
-	if len(arguments) != 1 {
-		return 0, fmt.Errorf("Usage:   go run main.go <total_users>\nexample: go run main.go 10")
+	if arguments[0] == "login" {
+		shouldLogIn = true
+	} else if arguments[0] == "test" {
+		shouldLogIn = false
 	}
-	num, err := strconv.Atoi(arguments[0])
-	if err != nil {
-		return 0, fmt.Errorf("Invalid number of users")
+	if shouldLogIn {
+		lowerBound, err = strconv.Atoi(arguments[1])
+		if err != nil {
+			fmt.Println(err)
+			return false, 0, 0, err
+		}
+		upperBound, err := strconv.Atoi(arguments[2])
+		if err != nil {
+			fmt.Println(err)
+			return false, 0, 0, err
+		}
+		return true, lowerBound, upperBound, nil
+	} else {
+		totalUsers, err := strconv.Atoi(arguments[1])
+		if err != nil {
+			fmt.Println(err)
+			return false, 0, 0, err
+		}
+		return false, 0, totalUsers, nil
 	}
-	return num, nil
 }
 
 func main() {
-	totalUsers, err := parseCmd()
+	shouldLogIn, lower, upper, err := parseCmd()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+
+	if shouldLogIn {
+		fmt.Println("log in with lower: ", lower, "upper: ", upper)
+	} else {
+		fmt.Println("test with: upper: ", upper)
+	}
+
+	client := resty.New()
+
 	var wg sync.WaitGroup
-	for i := 1; i <= totalUsers; i++ {
+	for i := 1; i <= upper; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			client := resty.New()
 			email, password := "not-a-robot-"+strconv.Itoa(i)+"@gmail.com", "Abcd1234"
 			fmt.Println("trying to login with email:", email, "password:", password)
 			accessToken, err := login(client, email, password)
