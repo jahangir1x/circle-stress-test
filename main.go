@@ -1,20 +1,17 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"github.com/go-resty/resty/v2"
-	"github.com/gocarina/gocsv"
-	"os"
-	"strconv"
 	"stress_test/serializer"
-	"strings"
+	"sync"
+
+	"github.com/go-resty/resty/v2"
 )
 
 func login(client *resty.Client) (string, error) {
 	payload := serializer.LoginReq{
-		Email:     "jahangir64r@gmail.com",
-		Password:  "Passw0rd",
+		Email:     "not-a-robot-test-thirty-two@gmail.com",
+		Password:  "Abcd1234",
 		LongLived: true,
 	}
 
@@ -23,7 +20,7 @@ func login(client *resty.Client) (string, error) {
 		SetHeader("Content-Type", "application/json").
 		SetBody(&payload).
 		SetResult(&loginResp).
-		Post("http://16.171.41.66:6977/api/log-in")
+		Post("http://dev.circlenetwork.social:5977/api/log-in")
 	if err != nil {
 		return "", err
 	}
@@ -32,94 +29,68 @@ func login(client *resty.Client) (string, error) {
 	return loginResp.AccessToken, nil
 }
 
-func parseCsvToStruct(csvPath string) ([]serializer.CsvData, error) {
-	csvFile, err := os.Open(csvPath)
-	if err != nil {
-		return nil, err
+func pingAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
+	defer wg.Done()
+
+	location := serializer.Location{
+		Latitude:  85.069,
+		Longitude: 180,
 	}
 
-	var csvParsedData []serializer.CsvData
-	if err := gocsv.UnmarshalFile(csvFile, &csvParsedData); err != nil {
-		return nil, err
-	}
-	return csvParsedData, nil
-}
-
-func createPlace(client *resty.Client, accessToken string, placeName string, latitude float64, longitude float64, radius float64) error {
-	payload := serializer.CreatePlaceReq{
-		Name:      placeName,
-		Latitude:  latitude,
-		Longitude: longitude,
-		Radius:    radius,
-	}
-
-	response, err := client.R().
+	var response interface{}
+	_, err := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Authorization", "Bearer "+accessToken).
-		SetBody(&payload).
-		Post("http://16.171.41.66:6977/api/place")
-	fmt.Println("Status:", response.Status())
+		SetBody(&location).
+		SetResult(&response).
+		Post("http://dev.circlenetwork.social:5977/api/ping")
 	if err != nil {
-		return err
-	}
-	fmt.Println(response.String())
-	return nil
-}
-
-func createMultiplePlaces(client *resty.Client, accessToken string, places []serializer.CsvData) error {
-	for _, place := range places {
-		latitude, err := strconv.ParseFloat(strings.Split(place.Coordinates, ", ")[0], 64)
-		if err != nil {
-			return err
-		}
-		longitude, err := strconv.ParseFloat(strings.Split(place.Coordinates, ", ")[1], 64)
-		if err != nil {
-			return err
-		}
-
-		err = createPlace(client, accessToken, place.LocationName, latitude, longitude, place.Radius)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func parseCsvPathFromCmd() (string, error) {
-	flag.Parse()
-	arguments := flag.Args()
-	if len(arguments) != 1 {
-		return "", fmt.Errorf("Usage: go run main.go <csv_file_path>")
-	}
-	return arguments[0], nil
-}
-
-func main() {
-	csvFilePath, err := parseCsvPathFromCmd()
-	if err != nil {
-
+		fmt.Println("Error pinging API:", err)
 		return
 	}
 
-	client := resty.New()
+	fmt.Println("Ping API response:", response)
+}
 
+func userFeedAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
+	defer wg.Done()
+
+	location := serializer.Location{
+		Latitude:  85.05112878,
+		Longitude: 180,
+	}
+
+	var response interface{}
+	_, err := client.R().
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Authorization", "Bearer "+accessToken).
+		SetBody(&location).
+		SetResult(&response).
+		Post("http://dev.circlenetwork.social:5977/api/user-feed")
+	if err != nil {
+		fmt.Println("Error fetching user feed:", err)
+		return
+	}
+
+	fmt.Println("User feed API response:", response)
+}
+
+func main() {
+
+	client := resty.New()
 	accessToken, err := login(client)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	fmt.Println("Logged in successfully")
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-	fmt.Println("Processing file: ", csvFilePath)
-	csvData, err := parseCsvToStruct(csvFilePath)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	go pingAPI(client, &wg, accessToken)
+	go userFeedAPI(client, &wg, accessToken)
 
-	err = createMultiplePlaces(client, accessToken, csvData)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	wg.Wait()
+	fmt.Println("Both goroutines completed execution")
+
 }

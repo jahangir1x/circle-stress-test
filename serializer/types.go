@@ -24,3 +24,7 @@ type CreatePlaceReq struct {
 	Longitude float64 `json:"longitude"`
 	Radius    float64 `json:"radius"`
 }
+type Location struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
