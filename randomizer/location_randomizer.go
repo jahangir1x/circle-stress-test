@@ -10,8 +10,8 @@ func GetRandomLatitude(locationSpread float64) float64 {
 }
 
 func GetRandomLongitude(locationSpread float64) float64 {
-	minLong := 45.0 - (locationSpread / 2)
-	maxLong := 45.0 + (locationSpread / 2)
+	minLong := 90.0 - (locationSpread / 2)
+	maxLong := 90.0 + (locationSpread / 2)
 	randomLong := minLong + rand.Float64()*(maxLong-minLong)
 	return randomLong
 }
