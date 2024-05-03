@@ -1,238 +1,122 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
+	"github.com/go-resty/resty/v2"
+	"math/rand"
 	"os"
 	"strconv"
 	"stress_test/randomizer"
+	"stress_test/repository"
+	"stress_test/requests"
 	"stress_test/serializer"
-	"sync"
-
-	"github.com/go-resty/resty/v2"
+	"time"
 )
 
-const accessTokenFile = "access_tokens.json"
-
-func login(client *resty.Client, email string, password string) (string, error) {
-	// Check if access token already exists in the file
-	accessToken, err := getAccessToken(email)
-	if err == nil && accessToken != "" {
-		return accessToken, nil
-	}
-
-	payload := serializer.LoginReq{
-		Email:     email,
-		Password:  password,
-		LongLived: true,
-	}
-
-	var loginResp serializer.LoginResp
-	response, err := client.R().
-		SetHeader("Content-Type", "application/json").
-		SetBody(&payload).
-		SetResult(&loginResp).
-		Post("http://dev.circlenetwork.social:5977/api/log-in")
-	if err != nil {
-		return "", err
-	}
-
-	fmt.Println("Status:", response.Status())
-
-	// Save access token to file
-	err = saveAccessToken(email, loginResp.AccessToken)
-	if err != nil {
-		fmt.Println("Error saving access token:", err)
-	}
-
-	return loginResp.AccessToken, nil
-}
-
-func getAccessToken(email string) (string, error) {
-	file, err := os.Open(accessTokenFile)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	var tokens []serializer.AccessToken
-	err = json.NewDecoder(file).Decode(&tokens)
-	if err != nil {
-		return "", err
-	}
-
-	for _, token := range tokens {
-		if token.Email == email {
-			return token.AccessToken, nil
-		}
-	}
-
-	return "", fmt.Errorf("Access token not found for email: %s", email)
-}
-
-func saveAccessToken(email, accessToken string) error {
-	file, err := os.OpenFile(accessTokenFile, os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	var tokens []serializer.AccessToken
-	err = json.NewDecoder(file).Decode(&tokens)
-	if err != nil && err != io.EOF {
-		return err
-	}
-
-	// Append new access token
-	tokens = append(tokens, serializer.AccessToken{Email: email, AccessToken: accessToken})
-
-	// Write back to the file
-	file.Seek(0, 0)
-	err = json.NewEncoder(file).Encode(tokens)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func pingAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
-	defer wg.Done()
-
-	location := serializer.Location{
-		Latitude:  randomizer.GetRandomLatitude(),
-		Longitude: randomizer.GetRandomLongitude(),
-	}
-
-	fmt.Println("ping location: ", location)
-
-	var response interface{}
-	_, err := client.R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Authorization", "Bearer "+accessToken).
-		SetBody(&location).
-		SetResult(&response).
-		Post("http://dev.circlenetwork.social:5977/api/ping")
-	if err != nil {
-		fmt.Println("Error pinging API:", err)
-		return
-	}
-
-	fmt.Println("Ping API response:", response)
-}
-
-func userFeedAPI(client *resty.Client, wg *sync.WaitGroup, accessToken string) {
-	defer wg.Done()
-
-	location := serializer.Location{
-		Latitude:  randomizer.GetRandomLatitude(),
-		Longitude: randomizer.GetRandomLongitude(),
-	}
-
-	fmt.Println("user feed location: ", location)
-
-	var response interface{}
-	_, err := client.R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Authorization", "Bearer "+accessToken).
-		SetBody(&location).
-		SetResult(&response).
-		Post("http://dev.circlenetwork.social:5977/api/user-feed")
-	if err != nil {
-		fmt.Println("Error fetching user feed:", err)
-		return
-	}
-
-	fmt.Println("User feed API response:", response)
-}
-
-func parseCmd() (shouldLogIn bool, lowerBound int, upperBound int, err error) {
+func parseCmd() (args serializer.CliArgs) {
+	flag.StringVar(&args.Operation, "action", "", "Action to perform: (login/test)")
+	flag.IntVar(&args.Start, "start", 0, "Start number of email")
+	flag.IntVar(&args.End, "end", 0, "End number of email")
+	flag.StringVar(&args.EmailPrefix, "email-prefix", "not-a-robot-", "Email prefix")
+	flag.StringVar(&args.EmailSuffix, "email-suffix", "@gmail.com", "Email suffix")
+	flag.StringVar(&args.Password, "password", "Abcd1234", "Password")
+	flag.Float64Var(&args.LocationSpread, "location-spread", 0.05, "Location spread to feed into to get random latitude and longitude.")
+	flag.Float64Var(&args.WaitTimeMin, "wait-time-min", 0.0, "Minimum wait time between API calls.")
+	flag.Float64Var(&args.WaitTimeMax, "wait-time-max", 3.0, "Maximum wait time between API calls.")
 	flag.Parse()
-	arguments := flag.Args()
-	if arguments[0] == "login" {
-		shouldLogIn = true
-	} else if arguments[0] == "test" {
-		shouldLogIn = false
+
+	if args.Operation == "" {
+		fmt.Println("Action is required.")
+		flag.PrintDefaults()
+		os.Exit(1)
 	}
-	if shouldLogIn {
-		lowerBound, err = strconv.Atoi(arguments[1])
+
+	if args.Start == 0 || args.End == 0 {
+		fmt.Println("Start and end are required.")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	if args.EmailPrefix == "" {
+		fmt.Println("Email prefix is required.")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	if args.EmailSuffix == "" {
+		fmt.Println("Email suffix is required.")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	if args.Operation == "login" && args.Password == "" {
+		fmt.Println("Password is required for login.")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	return args
+}
+
+func massLogin(client *resty.Client, start int, end int, emailPrefix string, emailSuffix string, password string) {
+	for i := start; i <= end; i++ {
+		email := emailPrefix + strconv.Itoa(i) + emailSuffix
+		fmt.Println("logging in: ", email, " password: ", password)
+		token, err := requests.Login(client, email, password)
 		if err != nil {
 			fmt.Println(err)
-			return false, 0, 0, err
+			return
 		}
-		upperBound, err := strconv.Atoi(arguments[2])
+		if err := repository.SaveToken(email, token); err != nil {
+			fmt.Println(err)
+			return
+		}
+	}
+}
+
+func testAPIs(client *resty.Client, start int, end int, emailPrefix string, emailSuffix string, locationSpread float64, waitTimeMin float64, waitTimeMax float64) {
+	for i := start; i <= end; i++ {
+		email := emailPrefix + strconv.Itoa(i) + emailSuffix
+		accessToken, err := repository.GetToken(email)
+		fmt.Println("user info: email: ", email, " access-token: ", accessToken)
 		if err != nil {
 			fmt.Println(err)
-			return false, 0, 0, err
+			return
 		}
-		return true, lowerBound, upperBound, nil
-	} else {
-		totalUsers, err := strconv.Atoi(arguments[1])
-		if err != nil {
-			fmt.Println(err)
-			return false, 0, 0, err
-		}
-		return false, 0, totalUsers, nil
+		go performUserOperations(client, email, accessToken, locationSpread, waitTimeMin, waitTimeMax)
+	}
+
+	select {}
+}
+
+func performUserOperations(client *resty.Client, email string, accessToken string, locationSpread float64, waitTimeMin float64, waitTimeMax float64) {
+	for {
+		lat := randomizer.GetRandomLatitude(locationSpread)
+		long := randomizer.GetRandomLongitude(locationSpread)
+
+		fmt.Println("ping-email: ", email)
+		requests.PingAPI(client, accessToken, lat, long)
+		randomSeconds := waitTimeMin + rand.Float64()*(waitTimeMax-waitTimeMin)
+		fmt.Println("waiting : ", randomSeconds, " seconds email: ", email)
+		time.Sleep(time.Duration(randomSeconds) * time.Second)
+
+		fmt.Println("user-feed-email: ", email)
+		requests.UserFeedAPI(client, accessToken, lat, long)
+		randomSeconds = waitTimeMin + rand.Float64()*(waitTimeMax-waitTimeMin)
+		fmt.Println("waiting for: ", randomSeconds, " seconds email: ", email)
+		time.Sleep(time.Duration(randomSeconds) * time.Second)
 	}
 }
 
 func main() {
-	shouldLogIn, lower, upper, err := parseCmd()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	args := parseCmd()
 
 	client := resty.New()
 
-	if shouldLogIn {
-		fmt.Println("log in with lower: ", lower, "upper: ", upper)
-
-		if _, err := os.Stat(accessTokenFile); err == nil {
-			// File exists, so remove it
-			err := os.Remove(accessTokenFile)
-			if err != nil {
-				fmt.Println("Error:", err)
-				return
-			}
-		}
-
-		for i := lower; i <= upper; i++ {
-			email, password := "not-a-robot-"+strconv.Itoa(i)+"@gmail.com", "Abcd1234"
-			_, err := login(client, email, password)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-		}
-		return
+	if args.Operation == "login" {
+		massLogin(client, args.Start, args.End, args.EmailPrefix, args.EmailSuffix, args.Password)
+	} else if args.Operation == "test" {
+		testAPIs(client, args.Start, args.End, args.EmailPrefix, args.EmailSuffix, args.LocationSpread, args.WaitTimeMin, args.WaitTimeMax)
 	}
-	fmt.Println("test with: upper: ", upper)
-	var wg sync.WaitGroup
-	for i := 1; i <= upper; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			email := "not-a-robot-" + strconv.Itoa(i) + "@gmail.com"
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			var wgJob sync.WaitGroup
-			wgJob.Add(2)
-
-			accessToken, err := getAccessToken(email)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			go pingAPI(client, &wg, accessToken)
-			go userFeedAPI(client, &wg, accessToken)
-
-			wgJob.Wait()
-		}()
-	}
-	wg.Wait()
 }

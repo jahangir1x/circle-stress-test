@@ -28,7 +28,15 @@ type Location struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
 }
-type AccessToken struct {
-	Email       string `json:"email"`
-	AccessToken string `json:"access_token"`
+
+type CliArgs struct {
+	Operation      string
+	Start          int
+	End            int
+	EmailPrefix    string
+	EmailSuffix    string
+	Password       string
+	LocationSpread float64
+	WaitTimeMin    float64
+	WaitTimeMax    float64
 }

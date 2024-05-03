@@ -2,16 +2,16 @@ package randomizer
 
 import "math/rand"
 
-func GetRandomLatitude() float64 {
-	minLat := 45.0
-	maxLat := 45.05
+func GetRandomLatitude(locationSpread float64) float64 {
+	minLat := 45.0 - (locationSpread / 2)
+	maxLat := 45.0 + (locationSpread / 2)
 	randomLat := minLat + rand.Float64()*(maxLat-minLat)
 	return randomLat
 }
 
-func GetRandomLongitude() float64 {
-	minLong := 45.0
-	maxLong := 45.05
+func GetRandomLongitude(locationSpread float64) float64 {
+	minLong := 45.0 - (locationSpread / 2)
+	maxLong := 45.0 + (locationSpread / 2)
 	randomLong := minLong + rand.Float64()*(maxLong-minLong)
 	return randomLong
 }
