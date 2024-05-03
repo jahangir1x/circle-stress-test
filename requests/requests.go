@@ -1,7 +1,6 @@
 package requests
 
 import (
-	"fmt"
 	"github.com/go-resty/resty/v2"
 	"stress_test/serializer"
 )
@@ -14,7 +13,7 @@ func Login(client *resty.Client, email string, password string) (string, error) 
 	}
 
 	var loginResp serializer.LoginResp
-	response, err := client.R().
+	_, err := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(&payload).
 		SetResult(&loginResp).
@@ -23,18 +22,14 @@ func Login(client *resty.Client, email string, password string) (string, error) 
 		return "", err
 	}
 
-	fmt.Println("Status:", response.Status())
-
 	return loginResp.AccessToken, nil
 }
 
-func UserFeedAPI(client *resty.Client, accessToken string, latitude float64, longitude float64) {
+func UserFeedAPI(client *resty.Client, accessToken string, latitude float64, longitude float64) error {
 	location := serializer.Location{
 		Latitude:  latitude,
 		Longitude: longitude,
 	}
-
-	fmt.Println("user feed location: ", location)
 
 	var response interface{}
 	_, err := client.R().
@@ -44,20 +39,18 @@ func UserFeedAPI(client *resty.Client, accessToken string, latitude float64, lon
 		SetResult(&response).
 		Post("http://dev.circlenetwork.social:5977/api/user-feed")
 	if err != nil {
-		fmt.Println("Error fetching user feed:", err)
-		return
+		return err
 	}
 
-	fmt.Println("User feed API response:", response)
+	return nil
+
 }
 
-func PingAPI(client *resty.Client, accessToken string, latitude float64, longitude float64) {
+func PingAPI(client *resty.Client, accessToken string, latitude float64, longitude float64) error {
 	location := serializer.Location{
 		Latitude:  latitude,
 		Longitude: longitude,
 	}
-
-	fmt.Println("ping location: ", location)
 
 	var response interface{}
 	_, err := client.R().
@@ -67,9 +60,8 @@ func PingAPI(client *resty.Client, accessToken string, latitude float64, longitu
 		SetResult(&response).
 		Post("http://dev.circlenetwork.social:5977/api/ping")
 	if err != nil {
-		fmt.Println("Error pinging API:", err)
-		return
+		return err
 	}
 
-	fmt.Println("Ping API response:", response)
+	return nil
 }

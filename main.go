@@ -95,16 +95,18 @@ func performUserOperations(client *resty.Client, email string, accessToken strin
 		lat := randomizer.GetRandomLatitude(locationSpread)
 		long := randomizer.GetRandomLongitude(locationSpread)
 
-		fmt.Println("ping-email: ", email)
-		requests.PingAPI(client, accessToken, lat, long)
+		if err := requests.PingAPI(client, accessToken, lat, long); err != nil {
+			fmt.Println(err)
+			return
+		}
 		randomSeconds := waitTimeMin + rand.Float64()*(waitTimeMax-waitTimeMin)
-		fmt.Println("waiting : ", randomSeconds, " seconds email: ", email)
 		time.Sleep(time.Duration(randomSeconds) * time.Second)
 
-		fmt.Println("user-feed-email: ", email)
-		requests.UserFeedAPI(client, accessToken, lat, long)
+		if err := requests.UserFeedAPI(client, accessToken, lat, long); err != nil {
+			fmt.Println(err)
+			return
+		}
 		randomSeconds = waitTimeMin + rand.Float64()*(waitTimeMax-waitTimeMin)
-		fmt.Println("waiting for: ", randomSeconds, " seconds email: ", email)
 		time.Sleep(time.Duration(randomSeconds) * time.Second)
 	}
 }
